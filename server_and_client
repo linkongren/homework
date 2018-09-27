@@ -1,0 +1,136 @@
+//  服务器端代码
+
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <errno.h>
+#include <arpa/inet.h>
+
+#define PORT 3333
+
+int main()
+{
+    int sockfd;
+    int sock_fd;
+    struct sockaddr_in server_addr;
+    struct sockaddr_in client_addr;
+    int addrlen = sizeof(struct sockaddr);
+    int addrinlen = sizeof(struct sockaddr_in);
+    int recvbytes;
+    char buf[1024];
+
+    //服务器创建套接字
+    if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+    {
+        fprintf(stderr, "socket error:%s\n", strerror(errno));
+	exit(1);
+    }
+    //服务器填充sockaddr结构
+    bzero(&server_addr, addrinlen);
+    server_addr.sin_family = AF_INET;
+    //server_addr.sin_addr.s_addr = htonl(INADDR_ANY);//INADDR_ANY表示可以接收任意IP地址的数据，即绑定所有的IP
+    server_addr.sin_addr.s_addr = inet_addr("192.168.1.222");//用于绑定到一个固定的IP，inet_addr用于把数字加格式的IP转化为整形IP
+    server_addr.sin_port = htons(PORT);
+
+    //绑定socket到IP地址
+    if(bind(sockfd, (struct sockaddr *)&server_addr, addrlen) < 0)
+    {
+        fprintf(stderr, "bind error:%s\n", strerror(errno));
+	exit(1);
+    }
+
+    //设置允许连接的最大客户端数目
+    if(listen(sockfd, 5) < 0)
+    {
+        fprintf(stderr, "listen error:%s\n", strerror(errno));
+	exit(1);
+    }
+
+    while(1)
+    {
+        //建立连接
+	if((sock_fd = accept(sockfd, (struct sockaddr *)&client_addr, &addrinlen)) < 0)
+	{
+            fprintf(stderr, "accept error:%s\n", strerror(errno));
+	    exit(1);
+	}
+        if(fork() == 0)
+	{
+	    if((recvbytes = recv(sock_fd, buf, 1024, 0)) < 0)
+	    {
+                fprintf(stderr, "recv error:%s\n", strerror(errno));
+	        exit(1); 
+	    }
+            buf[recvbytes] = '\0';
+            printf("buf is %s\n", buf);
+  	    close(sockfd);
+	    close(sock_fd);
+	    exit(0);
+	}
+	else
+	{
+	    //通讯结束
+            close(sock_fd);
+	}
+    }
+
+    //关闭
+    close(sockfd);
+
+    return 0;
+}
+
+
+
+客户端代码
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <string.h>
+#include <sys/types.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <sys/wait.h>
+#include <sys/file.h>
+#define MAX_SIZE 1024
+
+int main (int argc, char *argv[]){
+    int sock_client;
+    char buffer[MAX_SIZE];
+    struct sockaddr_in dest_addr;
+    int port = atoi(argv[2]);
+    char *host = argv[1];
+    if((sock_client = socket(AF_INET, SOCK_STREAM, 0)) < 0){
+        perror("Socket");
+        return -1;
+    }
+
+    dest_addr.sin_family = AF_INET;
+    dest_addr.sin_port = htons(port);
+    dest_addr.sin_addr.s_addr = inet_addr(host);
+    
+    if (connect(sock_client, (struct sockaddr*)&dest_addr, sizeof(dest_addr)) < 0)
+    {
+        perror("connect");
+        return -1;
+    }
+    while(1) {
+        FILE *fp;
+        fp  = fopen("/home/haizei/cc/tcp.c", "r");
+        if(fp == NULL){
+            printf("error");
+            break;
+        }
+        while(fread(buffer, 1, MAX_SIZE, fp) > 0){
+            send(sock_client, buffer, strlen(buffer), 0);
+        }
+        break;
+    }
+    close(sock_client);
+
+    return 0;
+}
+
